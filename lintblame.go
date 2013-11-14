@@ -10,10 +10,10 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
-    "time"
-	"sort"
+	"time"
 )
 
 var colors = map[string]string{
@@ -34,7 +34,7 @@ var rexes = map[string]*regexp.Regexp{
 	"pep8":      regexp.MustCompile(`\w+:(\d+):(\d+):\s(\w+)\s(.+)(?m)$`),
 	"pylint":    regexp.MustCompile(`(?m)^(\w):\s+(\d+),\s*(\d+):\s(.+)$`),
 	"blameName": regexp.MustCompile(`\(([\w\s]+)\d{4}`),
-    "goBuild": regexp.MustCompile(`\w+:(\d+):\s(.+)(?m)$`),
+	"goBuild":   regexp.MustCompile(`\w+:(\d+):\s(.+)(?m)$`),
 }
 
 var config = map[string]string{
@@ -83,13 +83,13 @@ func (c Environment) CurrentGitBranch() string {
 var env = Environment{}
 
 type Times []time.Time
-func (s Times) Len() int { return len(s) }
+
+func (s Times) Len() int      { return len(s) }
 func (s Times) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
-
 type ByTime struct{ Times }
-func (s ByTime) Less(i, j int) bool { return s.Times[i].Before(s.Times[j]) }
 
+func (s ByTime) Less(i, j int) bool { return s.Times[i].Before(s.Times[j]) }
 
 type ModifiedTimes struct {
 	timeMap map[string]time.Time
@@ -98,22 +98,22 @@ type ModifiedTimes struct {
 func (m *ModifiedTimes) CheckTime(path string) bool {
 	hasChanged := false
 
-    fileInfo, err := os.Stat(path)
+	fileInfo, err := os.Stat(path)
 	if err != nil {
 		log.Println("Couldn't access ", path, ". Skipping it.")
 	} else {
 		if fileInfo != nil {
 			mt := fileInfo.ModTime()
-            if storedTime, ok := m.timeMap[path]; ok {
-                if !storedTime.Equal(mt) {
-                    hasChanged = true
-                }
-            } else {
-                hasChanged = true
-            }
-            if hasChanged {
-                m.timeMap[path] = mt
-            }
+			if storedTime, ok := m.timeMap[path]; ok {
+				if !storedTime.Equal(mt) {
+					hasChanged = true
+				}
+			} else {
+				hasChanged = true
+			}
+			if hasChanged {
+				m.timeMap[path] = mt
+			}
 		}
 	}
 	return hasChanged
@@ -132,29 +132,27 @@ func (m ModifiedTimes) MostRecent() string {
 }
 
 func (m ModifiedTimes) PathsByModTime() []string {
-    size := len(m.timeMap)
-    times := make(Times, size)
-    timesToPaths := make(map[time.Time]string, size)
-    returnSlice := make([]string, size)
-    i := 0
-    for path, time_ := range m.timeMap {
-        times[i] = time_
-        timesToPaths[time_] = path
-        i += 1
-    }
-    sort.Sort(ByTime{times})
+	size := len(m.timeMap)
+	times := make(Times, size)
+	timesToPaths := make(map[time.Time]string, size)
+	returnSlice := make([]string, size)
+	i := 0
+	for path, time_ := range m.timeMap {
+		times[i] = time_
+		timesToPaths[time_] = path
+		i += 1
+	}
+	sort.Sort(ByTime{times})
 
-    for i, time_ := range times {
-        returnSlice[i] = timesToPaths[time_]
-    }
-    return returnSlice
+	for i, time_ := range times {
+		returnSlice[i] = timesToPaths[time_]
+	}
+	return returnSlice
 }
 
 func NewModifiedTimes() *ModifiedTimes {
-    return &ModifiedTimes{timeMap: make(map[string]time.Time, 9)}
+	return &ModifiedTimes{timeMap: make(map[string]time.Time, 9)}
 }
-
-
 
 type Wart struct {
 	Reporter  string
@@ -182,8 +180,8 @@ func (tf *TargetFile) Blame() {
 	if err != nil {
 		tf.BlameLines = make([]string, 0)
 	} else {
-    	tf.BlameLines = strings.Split(string(results), "\n")
-    }
+		tf.BlameLines = strings.Split(string(results), "\n")
+	}
 }
 
 func NewWart(reporter string, line string, column string, issueCode string, message string) Wart {
@@ -207,14 +205,14 @@ func NewWart(reporter string, line string, column string, issueCode string, mess
 }
 
 func (tf TargetFile) ExtEquals(ext string) bool {
-    return filepath.Ext(tf.Path) == ext
+	return filepath.Ext(tf.Path) == ext
 }
 
 func (tf *TargetFile) AddWart(wart Wart) {
-    if _, ok := tf.Warts[wart.Line]; !ok {
-        tf.Warts[wart.Line] = make([]Wart, 0)
-    }
-    tf.Warts[wart.Line] = append(tf.Warts[wart.Line], wart)
+	if _, ok := tf.Warts[wart.Line]; !ok {
+		tf.Warts[wart.Line] = make([]Wart, 0)
+	}
+	tf.Warts[wart.Line] = append(tf.Warts[wart.Line], wart)
 }
 
 func (tf *TargetFile) Pep8() {
@@ -226,21 +224,23 @@ func (tf *TargetFile) Pep8() {
 	parsed := rexes["pep8"].FindAllStringSubmatch(string(results), -1)
 	for _, group := range parsed {
 		wart := NewWart("PEP8", group[1], group[2], group[3], group[4])
-        tf.AddWart(wart)
+		tf.AddWart(wart)
 	}
 }
 
 func (tf *TargetFile) GoBuild() {
-    if !tf.ExtEquals(".go") { return }
-    os.Chdir(config["workingDir"])
-    _, file := filepath.Split(tf.Path)
-    cmd := exec.Command("go", "build", file)
-    results, _ := cmd.CombinedOutput()
-    parsed := rexes["goBuild"].FindAllStringSubmatch(string(results), -1)
-    for _, group := range parsed {
-        wart := NewWart("gobuild", group[1], "0", "-", group[2])
-        tf.AddWart(wart)
-    }
+	if !tf.ExtEquals(".go") {
+		return
+	}
+	os.Chdir(config["workingDir"])
+	_, file := filepath.Split(tf.Path)
+	cmd := exec.Command("go", "build", file)
+	results, _ := cmd.CombinedOutput()
+	parsed := rexes["goBuild"].FindAllStringSubmatch(string(results), -1)
+	for _, group := range parsed {
+		wart := NewWart("gobuild", group[1], "0", "-", group[2])
+		tf.AddWart(wart)
+	}
 }
 
 func (tf *TargetFile) PyLint() {
@@ -250,17 +250,17 @@ func (tf *TargetFile) PyLint() {
 	cmd := exec.Command("pylint", "--output-format=text", tf.Path)
 	results, _ := cmd.Output()
 	parsed := rexes["pylint"].FindAllStringSubmatch(string(results), -1)
-    for _, group := range parsed {
-        wart := NewWart("Pylint", group[2], group[3], group[1], group[4])
-        tf.AddWart(wart)
-    }
+	for _, group := range parsed {
+		wart := NewWart("Pylint", group[2], group[3], group[1], group[4])
+		tf.AddWart(wart)
+	}
 }
 
 func (tf TargetFile) BlameName(line int) string {
-    if len(tf.BlameLines) == 0 {
-        return "-"
-    }
-	match := rexes["blameName"].FindStringSubmatch(tf.BlameLines[line - 1])
+	if len(tf.BlameLines) == 0 {
+		return "-"
+	}
+	match := rexes["blameName"].FindStringSubmatch(tf.BlameLines[line-1])
 	return strings.TrimSpace(match[1])
 }
 
@@ -276,8 +276,8 @@ func NewTargetFile(path string) *TargetFile {
 	tf.ContentLines = strings.Split(string(bytes), "\n")
 	tf.Blame()
 	tf.Pep8()
-    tf.PyLint()
-    tf.GoBuild()
+	tf.PyLint()
+	tf.GoBuild()
 	return &tf
 }
 
@@ -322,10 +322,10 @@ func filterFiles(filepaths []string) []string {
 			if err != nil {
 				log.Fatalf("Failed checking %s's extension", filepath)
 			}
-            if match == true {
-                if !strings.HasPrefix(filepath, "/") {
-                    filepath = path.Join(config["workingDir"], filepath)
-                }
+			if match == true {
+				if !strings.HasPrefix(filepath, "/") {
+					filepath = path.Join(config["workingDir"], filepath)
+				}
 				goodstuffs = append(goodstuffs, filepath)
 			}
 		}
@@ -365,7 +365,7 @@ func clear() {
 	cmd := exec.Command("clear")
 	cmd.Stdout = os.Stdout
 	cmd.Run()
-    fmt.Println(color("header", "--- LintBlame ---"))
+	fmt.Println(color("header", "--- LintBlame ---"))
 }
 
 func makeTargetFile(filepath string, c chan *TargetFile) {
@@ -386,46 +386,46 @@ func update(filepaths []string) {
 		}
 		tf := <-c
 		printWarts(tf)
-        fmt.Println("")
+		fmt.Println("")
 	}
 }
 
 func initialPaths() []string {
-    var branch bool
-    flag.BoolVar(&branch, "b", false, "Run against current branch")
-    flag.Parse()
+	var branch bool
+	flag.BoolVar(&branch, "b", false, "Run against current branch")
+	flag.Parse()
 
-    var filepaths []string
-    if branch {
-        config["workingDir"] = env.GitPath()
-        filepaths = gitBranchFiles()
-    } else {
-        args := flag.Args()
-        if len(args) > 0 {
-            target := args[0]
-            stat, err := os.Stat(target)
-            if err != nil {
-                log.Fatal("Unable to process argument: ", target)
-            }
-            absPath, err := filepath.Abs(target)
-            if err != nil {
-                log.Fatal("Unable to get absolute path of ", target)
-            }
-            if stat.IsDir() {
-                config["workingDir"] = absPath
-                filepaths = getDirFiles(absPath)
-            } else {
-                dir, _ := filepath.Split(absPath)
-                config["workingDir"] = dir
-                filepaths = filterFiles([]string{absPath})
-            }
-        }
-    }
-    return filepaths
+	var filepaths []string
+	if branch {
+		config["workingDir"] = env.GitPath()
+		filepaths = gitBranchFiles()
+	} else {
+		args := flag.Args()
+		if len(args) > 0 {
+			target := args[0]
+			stat, err := os.Stat(target)
+			if err != nil {
+				log.Fatal("Unable to process argument: ", target)
+			}
+			absPath, err := filepath.Abs(target)
+			if err != nil {
+				log.Fatal("Unable to get absolute path of ", target)
+			}
+			if stat.IsDir() {
+				config["workingDir"] = absPath
+				filepaths = getDirFiles(absPath)
+			} else {
+				dir, _ := filepath.Split(absPath)
+				config["workingDir"] = dir
+				filepaths = filterFiles([]string{absPath})
+			}
+		}
+	}
+	return filepaths
 }
 
 func main() {
-    filepaths := initialPaths()
+	filepaths := initialPaths()
 	modTimes := NewModifiedTimes()
 
 	for _, file := range filepaths {
