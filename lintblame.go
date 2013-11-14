@@ -82,13 +82,13 @@ func (c Environment) CurrentGitBranch() string {
 
 var env = Environment{}
 
-type Times []*time.Time
+type Times []time.Time
 func (s Times) Len() int { return len(s) }
 func (s Times) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
 
 type ByTime struct{ Times }
-func (s ByTime) Less(i, j int) bool { return s.Times[i].Before(*s.Times[j]) }
+func (s ByTime) Less(i, j int) bool { return s.Times[i].Before(s.Times[j]) }
 
 
 type ModifiedTimes struct {
@@ -98,22 +98,22 @@ type ModifiedTimes struct {
 func (m *ModifiedTimes) CheckTime(path string) bool {
 	hasChanged := false
 
-	fileInfo, err := os.Stat(path)
+    fileInfo, err := os.Stat(path)
 	if err != nil {
 		log.Println("Couldn't access ", path, ". Skipping it.")
 	} else {
 		if fileInfo != nil {
 			mt := fileInfo.ModTime()
-			if storedTime, ok := m.timeMap[path]; ok {
-				if !storedTime.Equal(mt) {
-					hasChanged = true
-				}
-			} else {
-				hasChanged = true
-			}
-			if hasChanged {
-				m.timeMap[path] = mt
-			}
+            if storedTime, ok := m.timeMap[path]; ok {
+                if !storedTime.Equal(mt) {
+                    hasChanged = true
+                }
+            } else {
+                hasChanged = true
+            }
+            if hasChanged {
+                m.timeMap[path] = mt
+            }
 		}
 	}
 	return hasChanged
@@ -138,15 +138,14 @@ func (m ModifiedTimes) PathsByModTime() []string {
     returnSlice := make([]string, size)
     i := 0
     for path, time_ := range m.timeMap {
-        times[i] = &time_
+        times[i] = time_
         timesToPaths[time_] = path
         i += 1
     }
     sort.Sort(ByTime{times})
 
     for i, time_ := range times {
-        log.Print("time_: ", time_)
-        returnSlice[i] = timesToPaths[*time_]
+        returnSlice[i] = timesToPaths[time_]
     }
     return returnSlice
 }
