@@ -12,7 +12,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
+    "time"
+	"sort"
 )
 
 var colors = map[string]string{
@@ -81,12 +82,17 @@ func (c Environment) CurrentGitBranch() string {
 
 var env = Environment{}
 
-type ModifiedTimes struct {
-	times map[string]time.Time
-}
+type Times []*time.Time
+func (s Times) Len() int { return len(s) }
+func (s Times) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
-func NewModifiedTimes() *ModifiedTimes {
-	return &ModifiedTimes{times: make(map[string]time.Time, 9)}
+
+type ByTime struct{ Times }
+func (s ByTime) Less(i, j int) bool { return s.Times[i].Before(*s.Times[j]) }
+
+
+type ModifiedTimes struct {
+	timeMap map[string]time.Time
 }
 
 func (m *ModifiedTimes) CheckTime(path string) bool {
@@ -98,7 +104,7 @@ func (m *ModifiedTimes) CheckTime(path string) bool {
 	} else {
 		if fileInfo != nil {
 			mt := fileInfo.ModTime()
-			if storedTime, ok := m.times[path]; ok {
+			if storedTime, ok := m.timeMap[path]; ok {
 				if !storedTime.Equal(mt) {
 					hasChanged = true
 				}
@@ -106,7 +112,7 @@ func (m *ModifiedTimes) CheckTime(path string) bool {
 				hasChanged = true
 			}
 			if hasChanged {
-				m.times[path] = mt
+				m.timeMap[path] = mt
 			}
 		}
 	}
@@ -116,7 +122,7 @@ func (m *ModifiedTimes) CheckTime(path string) bool {
 func (m ModifiedTimes) MostRecent() string {
 	var returnPath string
 	var mostRecentTime time.Time
-	for path, time := range m.times {
+	for path, time := range m.timeMap {
 		if mostRecentTime.Before(time) {
 			returnPath = path
 			mostRecentTime = time
@@ -124,6 +130,32 @@ func (m ModifiedTimes) MostRecent() string {
 	}
 	return returnPath
 }
+
+func (m ModifiedTimes) PathsByModTime() []string {
+    size := len(m.timeMap)
+    times := make(Times, size)
+    timesToPaths := make(map[time.Time]string, size)
+    returnSlice := make([]string, size)
+    i := 0
+    for path, time_ := range m.timeMap {
+        times[i] = &time_
+        timesToPaths[time_] = path
+        i += 1
+    }
+    sort.Sort(ByTime{times})
+
+    for i, time_ := range times {
+        log.Print("time_: ", time_)
+        returnSlice[i] = timesToPaths[*time_]
+    }
+    return returnSlice
+}
+
+func NewModifiedTimes() *ModifiedTimes {
+    return &ModifiedTimes{timeMap: make(map[string]time.Time, 9)}
+}
+
+
 
 type Wart struct {
 	Reporter  string
@@ -250,14 +282,14 @@ func NewTargetFile(path string) *TargetFile {
 	return &tf
 }
 
-func getDirFiles(dir string) []string {
-	files, err := ioutil.ReadDir(dir)
+func getDirFiles(dirPath string) []string {
+	files, err := ioutil.ReadDir(dirPath)
 	if err != nil {
-		log.Fatal("Could not read directory", dir)
+		log.Fatal("Could not read directory", dirPath)
 	}
 	filepaths := make([]string, len(files))
 	for i, fileInfo := range files {
-		filepaths[i] = path.Join(dir, fileInfo.Name())
+		filepaths[i] = path.Join(dirPath, fileInfo.Name())
 	}
 	return filterFiles(filepaths)
 }
@@ -285,14 +317,17 @@ func gitBranchFiles() []string {
 
 func filterFiles(filepaths []string) []string {
 	goodstuffs := make([]string, 0)
-	for _, path := range filepaths {
-		if len(path) > 0 {
-			match, err := regexp.MatchString(".py|.go", filepath.Ext(path))
+	for _, filepath := range filepaths {
+		if len(filepath) > 0 {
+			match, err := regexp.MatchString(".py|.go", path.Ext(filepath))
 			if err != nil {
-				log.Fatalf("Failed checking %s's extension", path)
+				log.Fatalf("Failed checking %s's extension", filepath)
 			}
-			if match == true {
-				goodstuffs = append(goodstuffs, path)
+            if match == true {
+                if !strings.HasPrefix(filepath, "/") {
+                    filepath = path.Join(config["workingDir"], filepath)
+                }
+				goodstuffs = append(goodstuffs, filepath)
 			}
 		}
 	}
@@ -356,32 +391,48 @@ func update(filepaths []string) {
 	}
 }
 
-func main() {
-	var branch bool
-	var dir string
-	flag.BoolVar(&branch, "b", false, "Run against current branch")
-	flag.StringVar(&dir, "d", "", "Run against a directory")
-	flag.Parse()
+func initialPaths() []string {
+    var branch bool
+    flag.BoolVar(&branch, "b", false, "Run against current branch")
+    flag.Parse()
 
-	var filepaths []string
-	if len(dir) > 0 {
-        path, err := filepath.Abs(dir)
-        if err != nil {
-            log.Fatal("Unable to get absolute path of ", dir)
+    var filepaths []string
+    if branch {
+        config["workingDir"] = env.GitPath()
+        filepaths = gitBranchFiles()
+    } else {
+        args := flag.Args()
+        if len(args) > 0 {
+            target := args[0]
+            stat, err := os.Stat(target)
+            if err != nil {
+                log.Fatal("Unable to process argument: ", target)
+            }
+            absPath, err := filepath.Abs(target)
+            if err != nil {
+                log.Fatal("Unable to get absolute path of ", target)
+            }
+            if stat.IsDir() {
+                config["workingDir"] = absPath
+                filepaths = getDirFiles(absPath)
+            } else {
+                dir, _ := filepath.Split(absPath)
+                config["workingDir"] = dir
+                filepaths = filterFiles([]string{absPath})
+            }
         }
-		config["workingDir"] = path
-		filepaths = getDirFiles(dir)
-	} else if branch {
-		config["workingDir"] = env.GitPath()
-		filepaths = gitBranchFiles()
-	}
+    }
+    return filepaths
+}
 
+func main() {
+    filepaths := initialPaths()
 	modTimes := NewModifiedTimes()
 
 	for _, file := range filepaths {
 		modTimes.CheckTime(file)
 	}
-	update(filepaths)
+	update(modTimes.PathsByModTime())
 	for {
 		runUpdate := false
 		for _, file := range filepaths {
@@ -391,9 +442,8 @@ func main() {
 			}
 		}
 		if runUpdate {
-			update(filepaths)
+			update(modTimes.PathsByModTime())
 		}
-
 		time.Sleep(1 * time.Second)
 	}
 }
