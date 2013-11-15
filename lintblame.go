@@ -405,7 +405,6 @@ func clear() {
 
 func printResults(modTimes ModifiedTimes) {
     filepaths := modTimes.SortaSorted()
-    log.Print("filepaths: ", filepaths)
 	start := time.Now()
 	c := make(chan *TargetFile)
 	for _, path := range filepaths {
@@ -414,7 +413,7 @@ func printResults(modTimes ModifiedTimes) {
 	cleared := false
 	for i := 0; i < len(filepaths); i++ {
 		if !cleared {
-			// clear()
+			clear()
 			cleared = true
 		}
 		tf := <-c
