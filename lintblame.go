@@ -122,7 +122,7 @@ func (m *ModifiedTimes) CheckTime(path string) bool {
 	return hasChanged
 }
 
-// Make sure the most recent file is at the front of end list, so it's most visible in the output
+// Put the most recent file at the end of end list, so it's most visible in the output
 func (m ModifiedTimes) SortaSorted() []string {
     returnSlice := make([]string, 0)
 	var mostRecentTime time.Time
