@@ -10,10 +10,10 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
-	"sort"
-	"strconv"
-	"strings"
-	"time"
+    "strconv"
+    "strings"
+    "time"
+	// "sort"
 )
 
 var colors = map[string]string{
@@ -103,7 +103,6 @@ type ModifiedTimes struct {
 
 func (m *ModifiedTimes) CheckTime(path string) bool {
 	hasChanged := false
-
 	fileInfo, err := os.Stat(path)
 	if err == nil {
 		if fileInfo != nil {
@@ -123,39 +122,24 @@ func (m *ModifiedTimes) CheckTime(path string) bool {
 	return hasChanged
 }
 
-func (m ModifiedTimes) MostRecent() string {
-	var returnPath string
+// Make sure the most recent file is at the front of end list, so it's most visible in the output
+func (m ModifiedTimes) SortaSorted() []string {
+    returnSlice := make([]string, 0)
 	var mostRecentTime time.Time
 	for path, time := range m.TimeMap {
-		if mostRecentTime.Before(time) {
-			returnPath = path
-			mostRecentTime = time
-		}
+		if time.After(mostRecentTime) {
+            // If more recent, append it
+            returnSlice = append(returnSlice, path)
+            mostRecentTime = time
+        } else {
+            returnSlice = append([]string{path}, returnSlice...)
+        }
 	}
-	return returnPath
+    return returnSlice
 }
 
 func (m ModifiedTimes) Len() int {
 	return len(m.TimeMap)
-}
-
-func (m ModifiedTimes) PathsByModTime() []string {
-	size := len(m.TimeMap)
-	times := make(Times, size)
-	pathsByTime := make(map[time.Time]string, size)
-	returnSlice := make([]string, size)
-	i := 0
-	for path, time_ := range m.TimeMap {
-		times[i] = time_
-		pathsByTime[time_] = path
-		i += 1
-	}
-	sort.Sort(ByTime{times})
-
-	for i, time_ := range times {
-		returnSlice[i] = pathsByTime[time_]
-	}
-	return returnSlice
 }
 
 func NewModifiedTimes() *ModifiedTimes {
@@ -324,7 +308,7 @@ func getDirFiles(dirPath string) []string {
 	for i, fileInfo := range files {
 		filepaths[i] = path.Join(dirPath, fileInfo.Name())
 	}
-	return filterFiles(filepaths)
+    return filterFiles(filepaths)
 }
 
 // Returns paths to watch for the current branch
@@ -346,7 +330,7 @@ func gitBranchFiles() []string {
 		strings.Split(string(dirtyFiles), "\n"),
 		strings.Split(string(branchFiles), "\n")...,
 	)
-	return filterFiles(allFiles)
+    return filterFiles(allFiles)
 }
 
 // Filters candidate paths to those that should be watched
@@ -419,16 +403,18 @@ func clear() {
 	)
 }
 
-func update(filepaths []string) {
+func printResults(modTimes ModifiedTimes) {
+    filepaths := modTimes.SortaSorted()
+    log.Print("filepaths: ", filepaths)
 	start := time.Now()
 	c := make(chan *TargetFile)
 	for _, path := range filepaths {
-		go makeTargetFile(path, c)
+        go makeTargetFile(path, c)
 	}
 	cleared := false
 	for i := 0; i < len(filepaths); i++ {
 		if !cleared {
-			clear()
+			// clear()
 			cleared = true
 		}
 		tf := <-c
@@ -473,7 +459,8 @@ func targetPaths() []string {
 	return argPathPaths()
 }
 
-func init() {
+// init() runs when testing as well, so keep this named something else.
+func initConfig() {
 	var branch bool
 	flag.BoolVar(&branch, "b", false, "Run against current branch")
 	flag.Parse()
@@ -507,9 +494,10 @@ func init() {
 }
 
 func main() {
+    initConfig()
 	filepaths := config.InitialPaths
 	modTimes := NewModifiedTimes()
-	update(modTimes.PathsByModTime())
+	printResults(*modTimes)
 	loopCount := 0
 	for {
 		runUpdate := false
@@ -520,14 +508,14 @@ func main() {
 			}
 		}
 		if runUpdate {
-			update(modTimes.PathsByModTime())
+			printResults(*modTimes)
 		}
 		if loopCount%5 == 0 {
 			// Update file list
 			oldLen := modTimes.Len()
 			modTimes = NewModifiedTimes()
 			if modTimes.Len() != oldLen {
-				update(modTimes.PathsByModTime())
+				printResults(*modTimes)
 			}
 		}
 		time.Sleep(1 * time.Second)
