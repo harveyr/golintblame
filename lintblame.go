@@ -38,9 +38,9 @@ var rexes = map[string]*regexp.Regexp{
 }
 
 type Config struct {
-    BranchMode   bool
+	BranchMode   bool
 	WorkingDir   string
-    ArgPath      string
+	ArgPath      string
 	InitialPaths []string
 	PrintLimit   int
 }
@@ -136,7 +136,7 @@ func (m ModifiedTimes) MostRecent() string {
 }
 
 func (m ModifiedTimes) Len() int {
-    return len(m.TimeMap)
+	return len(m.TimeMap)
 }
 
 func (m ModifiedTimes) PathsByModTime() []string {
@@ -160,10 +160,10 @@ func (m ModifiedTimes) PathsByModTime() []string {
 
 func NewModifiedTimes() *ModifiedTimes {
 	modTimes := ModifiedTimes{TimeMap: make(map[string]time.Time)}
-    for _, file := range targetPaths() {
-        modTimes.CheckTime(file)
-    }
-    return &modTimes
+	for _, file := range targetPaths() {
+		modTimes.CheckTime(file)
+	}
+	return &modTimes
 }
 
 type Wart struct {
@@ -180,22 +180,22 @@ func (w Wart) String() string {
 
 func NewWart(reporter string, line string, column string, issueCode string, message string) Wart {
 
-    line64, err := strconv.ParseInt(line, 10, 0)
-    if err != nil {
-        log.Fatalf("Failed parsing line number %s", line)
-    }
-    col64, err := strconv.ParseInt(column, 10, 0)
-    if err != nil {
-        log.Fatalf("Failed parsing column number %s", column)
-    }
-    w := Wart{
-        Reporter:  reporter,
-        Line:      int(line64),
-        Column:    int(col64),
-        IssueCode: issueCode,
-        Message:   message,
-    }
-    return w
+	line64, err := strconv.ParseInt(line, 10, 0)
+	if err != nil {
+		log.Fatalf("Failed parsing line number %s", line)
+	}
+	col64, err := strconv.ParseInt(column, 10, 0)
+	if err != nil {
+		log.Fatalf("Failed parsing column number %s", column)
+	}
+	w := Wart{
+		Reporter:  reporter,
+		Line:      int(line64),
+		Column:    int(col64),
+		IssueCode: issueCode,
+		Message:   message,
+	}
+	return w
 }
 
 type TargetFile struct {
@@ -242,28 +242,28 @@ func (tf *TargetFile) Pep8() {
 
 // Run a go command against the file. E.g., `go build`
 func (tf *TargetFile) GoCmd(goCmd string) {
-    if !tf.ExtEquals(".go") {
-        return
-    }
-    os.Chdir(config.WorkingDir)
-    _, file := filepath.Split(tf.Path)
-    cmd := exec.Command("go", goCmd, file)
-    results, _ := cmd.CombinedOutput()
-    parsed := rexes["goBuild"].FindAllStringSubmatch(string(results), -1)
-    for _, group := range parsed {
-        wart := NewWart(goCmd, group[1], "0", "-", group[2])
-        tf.AddWart(wart)
-    }
+	if !tf.ExtEquals(".go") {
+		return
+	}
+	os.Chdir(config.WorkingDir)
+	_, file := filepath.Split(tf.Path)
+	cmd := exec.Command("go", goCmd, file)
+	results, _ := cmd.CombinedOutput()
+	parsed := rexes["goBuild"].FindAllStringSubmatch(string(results), -1)
+	for _, group := range parsed {
+		wart := NewWart(goCmd, group[1], "0", "-", group[2])
+		tf.AddWart(wart)
+	}
 }
 
 // Run `go build`
 func (tf *TargetFile) GoBuild() {
-    tf.GoCmd("build")
+	tf.GoCmd("build")
 }
 
 // Run `go vet`
 func (tf *TargetFile) GoVet() {
-    tf.GoCmd("vet")
+	tf.GoCmd("vet")
 }
 
 // Run `pylint`
@@ -303,15 +303,15 @@ func NewTargetFile(path string) *TargetFile {
 	tf.Blame()
 	tf.Pep8()
 	tf.PyLint()
-    tf.GoBuild()
+	tf.GoBuild()
 	tf.GoVet()
 	return &tf
 }
 
 // Create a TargetFile in a goroutine
 func makeTargetFile(filepath string, c chan *TargetFile) {
-    tf := NewTargetFile(filepath)
-    c <- tf
+	tf := NewTargetFile(filepath)
+	c <- tf
 }
 
 // Returns paths to watch for a given directory
@@ -372,14 +372,14 @@ func filterFiles(filepaths []string) []string {
 // Print the target file's issues
 func printWarts(targetFile *TargetFile) {
 	if len(targetFile.Warts) == 0 {
-    	fmt.Printf(
-            "%s [%s]",
-            color("green", targetFile.Path),
-            color("bold", "clean"),
-        )
-    } else {
-        fmt.Println(color("yellow", targetFile.Path))
-    }
+		fmt.Printf(
+			"%s [%s]",
+			color("green", targetFile.Path),
+			color("bold", "clean"),
+		)
+	} else {
+		fmt.Println(color("yellow", targetFile.Path))
+	}
 	for line, warts := range targetFile.Warts {
 		blameName := targetFile.BlameName(line)
 		nameColor := "blue"
@@ -403,24 +403,24 @@ func printWarts(targetFile *TargetFile) {
 	}
 }
 
-// Clear the screen
+// Clear the screen and print the header
 func clear() {
 	cmd := exec.Command("clear")
 	cmd.Stdout = os.Stdout
 	cmd.Run()
 	fmt.Println(
-        fmt.Sprintf(
-    		"%s %s%s %s",
-    		color("bold", "---"),
-    		color("bold", "Lint"),
-    		color("red", "Blame"),
-    		color("bold", "---"),
-        ),
-    )
+		fmt.Sprintf(
+			"%s %s%s %s",
+			color("bold", "---"),
+			color("bold", "lint"),
+			color("red", "blame"),
+			color("bold", "---"),
+		),
+	)
 }
 
 func update(filepaths []string) {
-    start := time.Now()
+	start := time.Now()
 	c := make(chan *TargetFile)
 	for _, path := range filepaths {
 		go makeTargetFile(path, c)
@@ -435,42 +435,42 @@ func update(filepaths []string) {
 		printWarts(tf)
 		fmt.Println("")
 	}
-    duration := time.Now().Sub(start)
+	duration := time.Now().Sub(start)
 
-    fmt.Printf(
-        "[last ran at %d:%d:%d in %s]\n",
-        start.Hour(),
-        start.Minute(),
-        start.Second(),
-        duration,
-    )
+	fmt.Printf(
+		"[last ran at %d:%d:%d in %s]\n",
+		start.Hour(),
+		start.Minute(),
+		start.Second(),
+		duration,
+	)
 
 }
 
 func getFileInfo(filepath string) os.FileInfo {
-    fileInfo, err := os.Stat(filepath)
-    if err != nil {
-        log.Fatal("Failed to get info for path: ", filepath)
-    }
-    return fileInfo
+	fileInfo, err := os.Stat(filepath)
+	if err != nil {
+		log.Fatal("Failed to get info for path: ", filepath)
+	}
+	return fileInfo
 }
 
 // Returns path slice based on command line argument path
 func argPathPaths() []string {
-    fileInfo := getFileInfo(config.ArgPath)
-    if fileInfo.IsDir() {
-        return getDirFiles(config.ArgPath)
-    } else {
-        return filterFiles([]string{config.ArgPath})
-    }
+	fileInfo := getFileInfo(config.ArgPath)
+	if fileInfo.IsDir() {
+		return getDirFiles(config.ArgPath)
+	} else {
+		return filterFiles([]string{config.ArgPath})
+	}
 }
 
 // Return the paths to be watched
 func targetPaths() []string {
-    if config.BranchMode {
-        return gitBranchFiles()
-    }
-    return argPathPaths()
+	if config.BranchMode {
+		return gitBranchFiles()
+	}
+	return argPathPaths()
 }
 
 func init() {
@@ -478,7 +478,7 @@ func init() {
 	flag.BoolVar(&branch, "b", false, "Run against current branch")
 	flag.Parse()
 
-    config.BranchMode = branch
+	config.BranchMode = branch
 
 	if branch {
 		config.WorkingDir = env.GitPath()
@@ -494,7 +494,7 @@ func init() {
 			if err != nil {
 				log.Fatal("Unable to get absolute path of ", target)
 			}
-            config.ArgPath = absPath
+			config.ArgPath = absPath
 			if stat.IsDir() {
 				config.WorkingDir = absPath
 			} else {
@@ -507,12 +507,12 @@ func init() {
 }
 
 func main() {
-    filepaths := config.InitialPaths
-    modTimes := NewModifiedTimes()
-    update(modTimes.PathsByModTime())
-    loopCount := 0
-    for {
-        runUpdate := false
+	filepaths := config.InitialPaths
+	modTimes := NewModifiedTimes()
+	update(modTimes.PathsByModTime())
+	loopCount := 0
+	for {
+		runUpdate := false
 		for _, file := range filepaths {
 			if modTimes.CheckTime(file) {
 				runUpdate = true
@@ -522,15 +522,15 @@ func main() {
 		if runUpdate {
 			update(modTimes.PathsByModTime())
 		}
-        if loopCount % 5 == 0 {
-            // Update file list
-            oldLen := modTimes.Len()
-            modTimes = NewModifiedTimes()
-            if modTimes.Len() != oldLen {
-                update(modTimes.PathsByModTime())
-            }
-        }
-        time.Sleep(1 * time.Second)
-        loopCount += 1
-    }
+		if loopCount%5 == 0 {
+			// Update file list
+			oldLen := modTimes.Len()
+			modTimes = NewModifiedTimes()
+			if modTimes.Len() != oldLen {
+				update(modTimes.PathsByModTime())
+			}
+		}
+		time.Sleep(1 * time.Second)
+		loopCount += 1
+	}
 }
