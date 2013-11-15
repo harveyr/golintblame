@@ -98,19 +98,17 @@ type ByTime struct{ Times }
 func (s ByTime) Less(i, j int) bool { return s.Times[i].Before(s.Times[j]) }
 
 type ModifiedTimes struct {
-	timeMap map[string]time.Time
+	TimeMap map[string]time.Time
 }
 
 func (m *ModifiedTimes) CheckTime(path string) bool {
 	hasChanged := false
 
 	fileInfo, err := os.Stat(path)
-	if err != nil {
-		log.Println("Couldn't access ", path, ". Skipping it.")
-	} else {
+	if err == nil {
 		if fileInfo != nil {
 			mt := fileInfo.ModTime()
-			if storedTime, ok := m.timeMap[path]; ok {
+			if storedTime, ok := m.TimeMap[path]; ok {
 				if !storedTime.Equal(mt) {
 					hasChanged = true
 				}
@@ -118,7 +116,7 @@ func (m *ModifiedTimes) CheckTime(path string) bool {
 				hasChanged = true
 			}
 			if hasChanged {
-				m.timeMap[path] = mt
+				m.TimeMap[path] = mt
 			}
 		}
 	}
@@ -128,7 +126,7 @@ func (m *ModifiedTimes) CheckTime(path string) bool {
 func (m ModifiedTimes) MostRecent() string {
 	var returnPath string
 	var mostRecentTime time.Time
-	for path, time := range m.timeMap {
+	for path, time := range m.TimeMap {
 		if mostRecentTime.Before(time) {
 			returnPath = path
 			mostRecentTime = time
@@ -137,13 +135,17 @@ func (m ModifiedTimes) MostRecent() string {
 	return returnPath
 }
 
+func (m ModifiedTimes) Len() int {
+    return len(m.TimeMap)
+}
+
 func (m ModifiedTimes) PathsByModTime() []string {
-	size := len(m.timeMap)
+	size := len(m.TimeMap)
 	times := make(Times, size)
 	pathsByTime := make(map[time.Time]string, size)
 	returnSlice := make([]string, size)
 	i := 0
-	for path, time_ := range m.timeMap {
+	for path, time_ := range m.TimeMap {
 		times[i] = time_
 		pathsByTime[time_] = path
 		i += 1
@@ -157,7 +159,11 @@ func (m ModifiedTimes) PathsByModTime() []string {
 }
 
 func NewModifiedTimes() *ModifiedTimes {
-	return &ModifiedTimes{timeMap: make(map[string]time.Time)}
+	modTimes := ModifiedTimes{TimeMap: make(map[string]time.Time)}
+    for _, file := range targetPaths() {
+        modTimes.CheckTime(file)
+    }
+    return &modTimes
 }
 
 type Wart struct {
@@ -234,6 +240,7 @@ func (tf *TargetFile) Pep8() {
 	}
 }
 
+// Run a go command against the file. E.g., `go build`
 func (tf *TargetFile) GoCmd(goCmd string) {
     if !tf.ExtEquals(".go") {
         return
@@ -249,14 +256,17 @@ func (tf *TargetFile) GoCmd(goCmd string) {
     }
 }
 
+// Run `go build`
 func (tf *TargetFile) GoBuild() {
     tf.GoCmd("build")
 }
 
+// Run `go vet`
 func (tf *TargetFile) GoVet() {
     tf.GoCmd("vet")
 }
 
+// Run `pylint`
 func (tf *TargetFile) PyLint() {
 	if filepath.Ext(tf.Path) != ".py" {
 		return
@@ -270,6 +280,7 @@ func (tf *TargetFile) PyLint() {
 	}
 }
 
+// Get the blame name for a given line
 func (tf TargetFile) BlameName(line int) string {
 	if len(tf.BlameLines) == 0 {
 		return "-"
@@ -278,6 +289,7 @@ func (tf TargetFile) BlameName(line int) string {
 	return strings.TrimSpace(match[1])
 }
 
+// Create a TargetFile
 func NewTargetFile(path string) *TargetFile {
 	tf := TargetFile{
 		Path:  path,
@@ -296,6 +308,7 @@ func NewTargetFile(path string) *TargetFile {
 	return &tf
 }
 
+// Create a TargetFile in a goroutine
 func makeTargetFile(filepath string, c chan *TargetFile) {
     tf := NewTargetFile(filepath)
     c <- tf
@@ -407,6 +420,7 @@ func clear() {
 }
 
 func update(filepaths []string) {
+    start := time.Now()
 	c := make(chan *TargetFile)
 	for _, path := range filepaths {
 		go makeTargetFile(path, c)
@@ -421,6 +435,16 @@ func update(filepaths []string) {
 		printWarts(tf)
 		fmt.Println("")
 	}
+    duration := time.Now().Sub(start)
+
+    fmt.Printf(
+        "[last ran at %d:%d:%d in %s]\n",
+        start.Hour(),
+        start.Minute(),
+        start.Second(),
+        duration,
+    )
+
 }
 
 func getFileInfo(filepath string) os.FileInfo {
@@ -482,18 +506,13 @@ func init() {
 	config.InitialPaths = targetPaths()
 }
 
-// TODO: Update files every so often
 func main() {
-	filepaths := config.InitialPaths
-	modTimes := NewModifiedTimes()
-
-	for _, file := range filepaths {
-		modTimes.CheckTime(file)
-	}
-	update(modTimes.PathsByModTime())
+    filepaths := config.InitialPaths
+    modTimes := NewModifiedTimes()
+    update(modTimes.PathsByModTime())
     loopCount := 0
-	for {
-		runUpdate := false
+    for {
+        runUpdate := false
 		for _, file := range filepaths {
 			if modTimes.CheckTime(file) {
 				runUpdate = true
@@ -503,7 +522,15 @@ func main() {
 		if runUpdate {
 			update(modTimes.PathsByModTime())
 		}
+        if loopCount % 5 == 0 {
+            // Update file list
+            oldLen := modTimes.Len()
+            modTimes = NewModifiedTimes()
+            if modTimes.Len() != oldLen {
+                update(modTimes.PathsByModTime())
+            }
+        }
         time.Sleep(1 * time.Second)
         loopCount += 1
-	}
+    }
 }
